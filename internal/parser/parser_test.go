@@ -118,6 +118,39 @@ func TestNamedParameterGroupParsesToBindingPattern(t *testing.T) {
 	assert.Assert(t, secondPropertyNode.PostfixToken() == nil)
 }
 
+func TestNamedArgumentCallDesugarsToObjectLiteral(t *testing.T) {
+	source := "foo(x: 5, y: 6);"
+	file := ParseSourceFile(ast.SourceFileParseOptions{FileName: "/index.ts", Path: tspath.Path("/index.ts")}, source, core.ScriptKindTS)
+	assert.Equal(t, len(file.Statements.Nodes), 1)
+
+	stmt := file.Statements.Nodes[0]
+	assert.Equal(t, stmt.Kind, ast.KindExpressionStatement)
+	expr := stmt.AsExpressionStatement().Expression
+	assert.Assert(t, expr != nil)
+	call := (*ast.Node)(expr)
+	assert.Equal(t, call.Kind, ast.KindCallExpression)
+
+	arguments := call.AsCallExpression().Arguments
+	assert.Equal(t, len(arguments.Nodes), 1)
+
+	argument := arguments.Nodes[0]
+	assert.Equal(t, argument.Kind, ast.KindObjectLiteralExpression)
+	properties := argument.AsObjectLiteralExpression().Properties.Nodes
+	assert.Equal(t, len(properties), 2)
+
+	firstProperty := properties[0]
+	assert.Equal(t, firstProperty.Kind, ast.KindPropertyAssignment)
+	firstName := (*ast.Node)(firstProperty.AsPropertyAssignment().Name())
+	assert.Equal(t, firstName.Kind, ast.KindIdentifier)
+	assert.Equal(t, firstName.AsIdentifier().Text, "x")
+
+	secondProperty := properties[1]
+	assert.Equal(t, secondProperty.Kind, ast.KindPropertyAssignment)
+	secondName := (*ast.Node)(secondProperty.AsPropertyAssignment().Name())
+	assert.Equal(t, secondName.Kind, ast.KindIdentifier)
+	assert.Equal(t, secondName.AsIdentifier().Text, "y")
+}
+
 func FuzzParser(f *testing.F) {
 	repo.SkipIfNoTypeScriptSubmodule(f)
 
