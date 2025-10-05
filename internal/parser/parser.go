@@ -3159,10 +3159,18 @@ func (p *Parser) parseParameterEx(inOuterAwaitContext bool, allowAmbiguity bool)
 	pos := p.nodePos()
 	hasJSDoc := p.hasPrecedingJSDocComment()
 	// FormalParameter [Yield,Await]:
-	//      BindingElement[?Yield,?Await]
+	//
+	//	BindingElement[?Yield,?Await]
+	//
 	// Decorators are parsed in the outer [Await] context, the rest of the parameter is parsed in the function's [Await] context.
 	saveContextFlags := p.contextFlags
 	p.setContextFlags(ast.NodeFlagsAwaitContext, inOuterAwaitContext)
+	if p.token == ast.KindAtToken && p.isNamedParameterStart() {
+		result := p.parseNamedParameterGroup()
+		p.contextFlags = saveContextFlags
+		p.withJSDoc(result, hasJSDoc)
+		return result
+	}
 	modifiers := p.parseModifiersEx(true /*allowDecorators*/, false /*permitConstAsModifier*/, false /*stopOnStartOfClassStaticBlock*/)
 	p.contextFlags = saveContextFlags
 	if p.token == ast.KindThisKeyword {
@@ -3192,6 +3200,92 @@ func (p *Parser) parseParameterEx(inOuterAwaitContext bool, allowAmbiguity bool)
 		p.parseInitializer())
 	p.withJSDoc(p.finishNode(result, pos), hasJSDoc)
 	return result
+}
+
+func (p *Parser) isNamedParameterStart() bool {
+	state := p.mark()
+	p.nextToken()
+	if !p.isBindingIdentifier() {
+		p.rewind(state)
+		return false
+	}
+	p.nextTokenWithoutCheck()
+	if p.token == ast.KindQuestionToken {
+		p.nextToken()
+	}
+	switch p.token {
+	case ast.KindColonToken, ast.KindEqualsToken, ast.KindCommaToken, ast.KindCloseParenToken:
+		p.rewind(state)
+		return true
+	default:
+		p.rewind(state)
+		return false
+	}
+}
+
+func (p *Parser) parseNamedParameterGroup() *ast.Node {
+	start := p.nodePos()
+	bindingElements := make([]*ast.Node, 0, 4)
+	typeMembers := make([]*ast.Node, 0, 4)
+
+	for {
+		elementStart := p.nodePos()
+		p.parseExpected(ast.KindAtToken)
+		name := p.parseBindingIdentifier()
+		questionToken := p.parseOptionalToken(ast.KindQuestionToken)
+		typeNode := p.parseTypeAnnotation()
+		initializer := p.parseInitializer()
+		elementEnd := p.nodePos()
+
+		bindingElement := p.finishNodeWithEnd(
+			p.factory.NewBindingElement(nil, nil, (*ast.BindingName)(name), initializer),
+			elementStart,
+			elementEnd,
+		)
+		bindingElement.Flags |= ast.NodeFlagsSynthesized
+		bindingElements = append(bindingElements, bindingElement)
+
+		propertyName := name.Clone(&p.factory)
+		var propertyQuestion *ast.Node
+		if questionToken != nil {
+			propertyQuestion = questionToken
+		} else if initializer != nil {
+			propertyQuestion = p.finishNodeWithEnd(p.factory.NewToken(ast.KindQuestionToken), elementEnd, elementEnd)
+			propertyQuestion.Flags |= ast.NodeFlagsSynthesized
+		}
+		property := p.finishNodeWithEnd(
+			p.factory.NewPropertySignatureDeclaration(nil, (*ast.PropertyName)(propertyName), propertyQuestion, typeNode, nil),
+			elementStart,
+			elementEnd,
+		)
+		property.Flags |= ast.NodeFlagsSynthesized
+		typeMembers = append(typeMembers, property)
+
+		if p.token == ast.KindCommaToken && p.lookAhead(func(p *Parser) bool {
+			p.nextToken()
+			return p.token == ast.KindAtToken
+		}) {
+			p.nextToken()
+			continue
+		}
+		break
+	}
+
+	end := p.nodePos()
+	bindingList := p.newNodeList(core.NewTextRange(start, end), p.nodeSlicePool.Clone(bindingElements))
+	typeList := p.newNodeList(core.NewTextRange(start, end), p.nodeSlicePool.Clone(typeMembers))
+
+	bindingPattern := p.finishNodeWithEnd(p.factory.NewBindingPattern(ast.KindObjectBindingPattern, bindingList), start, end)
+	bindingPattern.Flags |= ast.NodeFlagsSynthesized
+	typeLiteral := p.finishNodeWithEnd(p.factory.NewTypeLiteralNode(typeList), start, end)
+	typeLiteral.Flags |= ast.NodeFlagsSynthesized
+	parameter := p.finishNodeWithEnd(
+		p.factory.NewParameterDeclaration(nil, nil, (*ast.BindingName)(bindingPattern), nil, (*ast.TypeNode)(typeLiteral), nil),
+		start,
+		end,
+	)
+	parameter.Flags |= ast.NodeFlagsSynthesized
+	return parameter
 }
 
 func (p *Parser) isParameterNameStart() bool {
