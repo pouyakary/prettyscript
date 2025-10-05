@@ -2,38 +2,24 @@
 
 This is a modified TypeScript compiler with some interesting functionality
 
-## Named Parameters
+## Named Parameters and Arguments
 
 ```ts
-// Imagine you have this Foo
-function foo(options: { x: number; y?: string }) {
-  const { x, y = 2 } = options;
+// Defining and calling named parameters becomes effortless.
+function foo(@x: number? = 2, @y: string) {
   console.log(x, y);
 }
 
-// Here you can call foo like this, much like
-// Swift and Dart:
+// Invoke the function with labeled arguments, Swift/Dart style.
 foo(x: 2, y: "hello");
 
-// Which will compile to:
-foo({x: 2, y: "hello"});
-```
-
-## Named Parameters
-
-```ts
-// Defining  named  parameters  is  also very
-// tricky in TypeScript
-function foo(options: { x: number; y?: string }) {
-  const { x, y = 2 } = options;
+// The compiler desugars this into standard TypeScript.
+function foo(options: { x?: number; y: string }) {
+  const { x = 2, y } = options;
   console.log(x, y);
 }
 
-// The same here can be done by prepending an
-// at sign before the parameters:
-function foo(@x: number? = 2, @y: string) {
-    console.log(x, y);
-}
+foo({ x: 2, y: "hello" });
 ```
 
 ## Clean Control Structures

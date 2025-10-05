@@ -1184,7 +1184,7 @@ func (p *Parser) parseForOrForInOrForOfStatement() *ast.Node {
 		}
 		p.parseExpected(ast.KindSemicolonToken)
 		var incrementor *ast.Expression
-		if p.token != ast.KindOpenBraceToken && p.token != ast.KindCloseBraceToken && p.token != ast.KindEndOfFileToken {
+		if p.token != ast.KindOpenBraceToken && p.token != ast.KindCloseBraceToken && p.token != ast.KindEndOfFile {
 			incrementor = p.parseExpressionAllowIn()
 		}
 		result = p.factory.NewForStatement(initializer, condition, incrementor, p.parseBlock(false /*ignoreMissingOpenBrace*/, nil))
