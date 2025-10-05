@@ -1,0 +1,18 @@
+--- old.symbolLinkDeclarationEmitModuleNames.js
++++ new.symbolLinkDeclarationEmitModuleNames.js
+@@= skipped -31, +31 lines =@@
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.BindingKey = void 0;
+ class BindingKey {
++    __type;
+     static create(ctor) {
+         return new BindingKey();
+     }
+@@= skipped -31, +32 lines =@@
+ "use strict";
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.CONTROLLER_CLASS = void 0;
+-var context_1 = require("@loopback/context");
++const context_1 = require("@loopback/context");
+ exports.CONTROLLER_CLASS = context_1.BindingKey.create(null); // line in question
+

@@ -1,0 +1,10 @@
+--- old.inferenceAndSelfReferentialConstraint.js
++++ new.inferenceAndSelfReferentialConstraint.js
+@@= skipped -32, +32 lines =@@
+
+
+ //// [inferenceAndSelfReferentialConstraint.js]
+-// @strict
+ function test(arg) {
+     return arg;
+ }

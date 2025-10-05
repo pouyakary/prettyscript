@@ -1,0 +1,73 @@
+templateInsideCallback.js(15,11): error TS2315: Type 'Call' is not generic.
+templateInsideCallback.js(15,16): error TS2304: Cannot find name 'T'.
+templateInsideCallback.js(17,18): error TS7006: Parameter 'x' implicitly has an 'any' type.
+templateInsideCallback.js(29,5): error TS7012: This overload implicitly returns the type 'any' because it lacks a return type annotation.
+templateInsideCallback.js(37,5): error TS7012: This overload implicitly returns the type 'any' because it lacks a return type annotation.
+
+
+==== templateInsideCallback.js (5 errors) ====
+    /**
+     * @typedef Oops
+     * @template T
+     * @property {T} a
+     * @property {T} b
+     */
+    /**
+     * @callback Call
+     * @template T
+     * @param {T} x
+     * @returns {T}
+     */
+    /**
+     * @template T
+     * @type {Call<T>}
+              ~~~~~~~
+!!! error TS2315: Type 'Call' is not generic.
+                   ~
+!!! error TS2304: Cannot find name 'T'.
+     */
+    const identity = x => x;
+                     ~
+!!! error TS7006: Parameter 'x' implicitly has an 'any' type.
+    
+    /**
+     * @typedef Nested
+     * @property {Object} oh
+     * @property {number} oh.no
+     * @template T
+     * @property {string} oh.noooooo
+     */
+    
+    
+    /**
+     * @overload
+        ~~~~~~~~
+!!! error TS7012: This overload implicitly returns the type 'any' because it lacks a return type annotation.
+     * @template T
+     * @template U
+     * @param {T[]} array
+     * @param {(x: T) => U[]} iterable
+     * @returns {U[]}
+     */
+    /**
+     * @overload
+        ~~~~~~~~
+!!! error TS7012: This overload implicitly returns the type 'any' because it lacks a return type annotation.
+     * @template T
+     * @param {T[][]} array
+     * @returns {T[]}
+     */
+    /**
+     * @param {unknown[]} array
+     * @param {(x: unknown) => unknown} iterable
+     * @returns {unknown[]}
+     */
+    function flatMap(array, iterable = identity) {
+      /** @type {unknown[]} */
+      const result = [];
+      for (let i = 0; i < array.length; i += 1) {
+        result.push(.../** @type {unknown[]} */(iterable(array[i])));
+      }
+      return result;
+    }
+    
