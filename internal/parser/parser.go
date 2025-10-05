@@ -1106,14 +1106,15 @@ func (p *Parser) parseIfStatement() *ast.Node {
 	pos := p.nodePos()
 	hasJSDoc := p.hasPrecedingJSDocComment()
 	p.parseExpected(ast.KindIfKeyword)
-	openParenPosition := p.scanner.TokenStart()
-	openParenParsed := p.parseExpected(ast.KindOpenParenToken)
 	expression := p.parseExpressionAllowIn()
-	p.parseExpectedMatchingBrackets(ast.KindOpenParenToken, ast.KindCloseParenToken, openParenParsed, openParenPosition)
-	thenStatement := p.parseStatement()
+	thenStatement := p.parseBlock(false /*ignoreMissingOpenBrace*/, nil)
 	var elseStatement *ast.Statement
 	if p.parseOptional(ast.KindElseKeyword) {
-		elseStatement = p.parseStatement()
+		if p.token == ast.KindIfKeyword {
+			elseStatement = p.parseIfStatement()
+		} else {
+			elseStatement = p.parseBlock(false /*ignoreMissingOpenBrace*/, nil)
+		}
 	}
 	result := p.finishNode(p.factory.NewIfStatement(expression, thenStatement, elseStatement), pos)
 	p.withJSDoc(result, hasJSDoc)
@@ -1144,11 +1145,8 @@ func (p *Parser) parseWhileStatement() *ast.Node {
 	pos := p.nodePos()
 	hasJSDoc := p.hasPrecedingJSDocComment()
 	p.parseExpected(ast.KindWhileKeyword)
-	openParenPosition := p.scanner.TokenStart()
-	openParenParsed := p.parseExpected(ast.KindOpenParenToken)
 	expression := p.parseExpressionAllowIn()
-	p.parseExpectedMatchingBrackets(ast.KindOpenParenToken, ast.KindCloseParenToken, openParenParsed, openParenPosition)
-	statement := p.parseStatement()
+	statement := p.parseBlock(false /*ignoreMissingOpenBrace*/, nil)
 	result := p.finishNode(p.factory.NewWhileStatement(expression, statement), pos)
 	p.withJSDoc(result, hasJSDoc)
 	return result
@@ -1159,9 +1157,8 @@ func (p *Parser) parseForOrForInOrForOfStatement() *ast.Node {
 	hasJSDoc := p.hasPrecedingJSDocComment()
 	p.parseExpected(ast.KindForKeyword)
 	awaitToken := p.parseOptionalToken(ast.KindAwaitKeyword)
-	p.parseExpected(ast.KindOpenParenToken)
 	var initializer *ast.ForInitializer
-	if p.token != ast.KindSemicolonToken {
+	if p.token != ast.KindSemicolonToken && p.token != ast.KindOpenBraceToken && p.token != ast.KindCloseBraceToken {
 		if p.token == ast.KindVarKeyword || p.token == ast.KindLetKeyword || p.token == ast.KindConstKeyword ||
 			p.token == ast.KindUsingKeyword && p.lookAhead((*Parser).nextTokenIsBindingIdentifierOrStartOfDestructuringOnSameLineDisallowOf) ||
 			// this one is meant to allow of
@@ -1175,25 +1172,22 @@ func (p *Parser) parseForOrForInOrForOfStatement() *ast.Node {
 	switch {
 	case awaitToken != nil && p.parseExpected(ast.KindOfKeyword) || awaitToken == nil && p.parseOptional(ast.KindOfKeyword):
 		expression := doInContext(p, ast.NodeFlagsDisallowInContext, false, (*Parser).parseAssignmentExpressionOrHigher)
-		p.parseExpected(ast.KindCloseParenToken)
-		result = p.factory.NewForInOrOfStatement(ast.KindForOfStatement, awaitToken, initializer, expression, p.parseStatement())
+		result = p.factory.NewForInOrOfStatement(ast.KindForOfStatement, awaitToken, initializer, expression, p.parseBlock(false /*ignoreMissingOpenBrace*/, nil))
 	case p.parseOptional(ast.KindInKeyword):
 		expression := p.parseExpressionAllowIn()
-		p.parseExpected(ast.KindCloseParenToken)
-		result = p.factory.NewForInOrOfStatement(ast.KindForInStatement, nil /*awaitToken*/, initializer, expression, p.parseStatement())
+		result = p.factory.NewForInOrOfStatement(ast.KindForInStatement, nil /*awaitToken*/, initializer, expression, p.parseBlock(false /*ignoreMissingOpenBrace*/, nil))
 	default:
 		p.parseExpected(ast.KindSemicolonToken)
 		var condition *ast.Expression
-		if p.token != ast.KindSemicolonToken && p.token != ast.KindCloseParenToken {
+		if p.token != ast.KindSemicolonToken {
 			condition = p.parseExpressionAllowIn()
 		}
 		p.parseExpected(ast.KindSemicolonToken)
 		var incrementor *ast.Expression
-		if p.token != ast.KindCloseParenToken {
+		if p.token != ast.KindOpenBraceToken && p.token != ast.KindCloseBraceToken && p.token != ast.KindEndOfFileToken {
 			incrementor = p.parseExpressionAllowIn()
 		}
-		p.parseExpected(ast.KindCloseParenToken)
-		result = p.factory.NewForStatement(initializer, condition, incrementor, p.parseStatement())
+		result = p.factory.NewForStatement(initializer, condition, incrementor, p.parseBlock(false /*ignoreMissingOpenBrace*/, nil))
 	}
 	p.finishNode(result, pos)
 	p.withJSDoc(result, hasJSDoc)
@@ -1302,9 +1296,7 @@ func (p *Parser) parseSwitchStatement() *ast.Node {
 	pos := p.nodePos()
 	hasJSDoc := p.hasPrecedingJSDocComment()
 	p.parseExpected(ast.KindSwitchKeyword)
-	p.parseExpected(ast.KindOpenParenToken)
 	expression := p.parseExpressionAllowIn()
-	p.parseExpected(ast.KindCloseParenToken)
 	caseBlock := p.parseCaseBlock()
 	result := p.finishNode(p.factory.NewSwitchStatement(expression, caseBlock), pos)
 	p.withJSDoc(result, hasJSDoc)
