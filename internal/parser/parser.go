@@ -5403,9 +5403,73 @@ func (p *Parser) parseCallExpressionRest(pos int, expression *ast.Expression) *a
 
 func (p *Parser) parseArgumentList() *ast.NodeList {
 	p.parseExpected(ast.KindOpenParenToken)
+	if p.token != ast.KindCloseParenToken && p.isStartOfNamedArgumentList() {
+		properties, multiLine := p.parseNamedArgumentElements()
+		argumentPos := properties.Pos()
+		argument := p.finishNode(p.factory.NewObjectLiteralExpression(properties, multiLine), argumentPos)
+		list := []*ast.Node{argument}
+		result := p.newNodeList(core.NewTextRange(argumentPos, p.nodePos()), p.nodeSlicePool.Clone(list))
+		p.parseExpected(ast.KindCloseParenToken)
+		return result
+	}
 	result := p.parseDelimitedList(PCArgumentExpressions, (*Parser).parseArgumentExpression)
 	p.parseExpected(ast.KindCloseParenToken)
 	return result
+}
+
+func (p *Parser) parseNamedArgumentElements() (*ast.NodeList, bool) {
+	pos := p.nodePos()
+	multiLine := p.hasPrecedingLineBreak()
+	elements := make([]*ast.Node, 0, 4)
+
+	for p.token != ast.KindCloseParenToken && p.token != ast.KindEndOfFile {
+		element := p.parseNamedArgumentElement()
+		elements = append(elements, element)
+		if !p.parseOptional(ast.KindCommaToken) {
+			break
+		}
+		if p.token == ast.KindCloseParenToken {
+			break
+		}
+	}
+
+	return p.newNodeList(core.NewTextRange(pos, p.nodePos()), p.nodeSlicePool.Clone(elements)), multiLine
+}
+
+func (p *Parser) parseNamedArgumentElement() *ast.Node {
+	pos := p.nodePos()
+	hasJSDoc := p.hasPrecedingJSDocComment()
+
+	if p.parseOptional(ast.KindDotDotDotToken) {
+		expression := p.parseAssignmentExpressionOrHigher()
+		result := p.finishNode(p.factory.NewSpreadAssignment(expression), pos)
+		p.withJSDoc(result, hasJSDoc)
+		return result
+	}
+
+	name := p.parsePropertyName()
+	postfixToken := p.parseOptionalToken(ast.KindQuestionToken)
+	if postfixToken == nil {
+		postfixToken = p.parseOptionalToken(ast.KindExclamationToken)
+	}
+	p.parseExpected(ast.KindColonToken)
+	initializer := doInContext(p, ast.NodeFlagsDisallowInContext, false, (*Parser).parseAssignmentExpressionOrHigher)
+	node := p.finishNode(p.factory.NewPropertyAssignment(nil, name, postfixToken, nil, initializer), pos)
+	p.withJSDoc(node, hasJSDoc)
+	return node
+}
+
+func (p *Parser) isStartOfNamedArgumentList() bool {
+	return p.lookAhead(func(p *Parser) bool {
+		if !p.isLiteralPropertyName() {
+			return false
+		}
+		p.nextToken()
+		if p.token == ast.KindQuestionToken || p.token == ast.KindExclamationToken {
+			p.nextToken()
+		}
+		return p.token == ast.KindColonToken
+	})
 }
 
 func (p *Parser) parseArgumentExpression() *ast.Expression {
