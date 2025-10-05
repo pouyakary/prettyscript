@@ -87,6 +87,37 @@ func allParsableFiles(tb testing.TB, root string) iter.Seq[parsableFile] {
 	}
 }
 
+func TestNamedParameterGroupParsesToBindingPattern(t *testing.T) {
+	source := "function foo(@x: number = 2, @y: string) {}"
+	file := ParseSourceFile(ast.SourceFileParseOptions{FileName: "/index.ts", Path: tspath.Path("/index.ts")}, source, core.ScriptKindTS)
+	assert.Equal(t, len(file.Statements.Nodes), 1)
+	fnNode := file.Statements.Nodes[0]
+	params := fnNode.Parameters()
+	assert.Equal(t, len(params), 1)
+	parameter := params[0].AsParameterDeclaration()
+	assert.Assert(t, parameter.Initializer == nil)
+	bindingName := (*ast.Node)(parameter.Name())
+	assert.Equal(t, bindingName.Kind, ast.KindObjectBindingPattern)
+	elements := bindingName.AsBindingPattern().Elements.Nodes
+	assert.Equal(t, len(elements), 2)
+	firstBinding := elements[0].AsBindingElement()
+	firstName := (*ast.Node)(firstBinding.Name())
+	assert.Equal(t, firstName.AsIdentifier().Text, "x")
+	assert.Assert(t, firstBinding.Initializer != nil)
+	secondBinding := elements[1].AsBindingElement()
+	secondName := (*ast.Node)(secondBinding.Name())
+	assert.Equal(t, secondName.AsIdentifier().Text, "y")
+	assert.Assert(t, secondBinding.Initializer == nil)
+	typeLiteral := (*ast.Node)(parameter.Type)
+	assert.Equal(t, typeLiteral.Kind, ast.KindTypeLiteral)
+	members := typeLiteral.AsTypeLiteralNode().Members.Nodes
+	assert.Equal(t, len(members), 2)
+	firstPropertyNode := members[0]
+	assert.Assert(t, firstPropertyNode.PostfixToken() != nil)
+	secondPropertyNode := members[1]
+	assert.Assert(t, secondPropertyNode.PostfixToken() == nil)
+}
+
 func FuzzParser(f *testing.F) {
 	repo.SkipIfNoTypeScriptSubmodule(f)
 
